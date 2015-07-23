@@ -10,17 +10,7 @@ library(rgdal)
 library(rgeos)
 library(maptools)
 library(leaflet)
-
-
-# library(htmltools)
-# library(readr)
-# library(httr)
-# library(geojsonio)
-# library(R.utils)
-# library(RCurl)
-# library(downloader)
-# library(pryr)
-
+library(marray)
 
 ## load Shapefile data - not required if TopoJSON files we created are sufficient
 
@@ -67,7 +57,7 @@ ward_SA <- SpatialPolygonsDataFrame(data = ward_dbf, Sr = ward_tj, match.ID = "O
 town_SA <- SpatialPolygonsDataFrame(data = town_dbf, Sr = town_tj, match.ID = "ORDER")
 province_SA <- SpatialPolygonsDataFrame(data = province_dbf, Sr = province_tj, match.ID = "ORDER")
 
-# choropleth palette for ward density
+# choropleth palette for ward density. all density above 70th percentile (1474) is coded as "white"
 night_colors <- maPalette(low = "navy", mid = "yellow", high = "white")
 ventiles <- round(quantile(ward_SA@data$DENSITY, probs = seq(0, 1, 0.05)), digits = 0)
 pal_night <- colorNumeric(palette = night_colors, domain = ventiles[1:15], na.color = "white")
@@ -89,7 +79,7 @@ town_popup <- paste0("<strong>Muncipality: </strong>",
                      " people/km",
                      "<sup>2</sup>")
 
-
+# ward level choropleth spatial polygon map of population density over VIIRS City Light map tiles
 ward_density_map <- leaflet(ward_SA) %>% setView(lng = 28.2, lat = -26, zoom = 5) %>%
 # Base Groups
     addTiles(
@@ -99,11 +89,10 @@ ward_density_map <- leaflet(ward_SA) %>% setView(lng = 28.2, lat = -26, zoom = 5
                           'operated by the NASA/GSFC/<a href="https://earthdata.nasa.gov">EOSDIS</a>',
                           'with funding provided by NASA/HQ.')
       ) %>%
+  addProviderTiles("CartoDB.DarkMatter", group = "CartoDB Dark Matter") %>%
   #addProviderTiles("Stamen.Toner", group = "Stamen Toner") %>%  
   #addProviderTiles("CartoDB.Positron") %>%
-  addProviderTiles("CartoDB.DarkMatter", group = "CartoDB Dark Matter") %>%
   #addProviderTiles("MtbMap") %>%
-
 # Overlay Groups  
   addPolygons(data = ward_SA, stroke = T, weight = 0.5, opacity = 0, color = "navy", fillOpacity = 1, 
               smoothFactor = 0.5, fillColor = ~pal_night(DENSITY), 
@@ -122,61 +111,65 @@ ward_density_map <- leaflet(ward_SA) %>% setView(lng = 28.2, lat = -26, zoom = 5
                    options = layersControlOptions(collapse = FALSE)
 )
 
-spd_density_map <- leaflet(c(ward_SA, town_SA, province_SA)) %>% setView(lng = 28.2, lat = -26, zoom = 5) %>%
-# Base Groups
-  addTiles(
-    urlTemplate <- "http://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg", 
-    group = "Night Light",
-    attribution = paste('Imagery provided by GIBS,',
-                        'operated by the NASA/GSFC/<a href="https://earthdata.nasa.gov">EOSDIS</a>',
-                        'with funding provided by NASA/HQ.')
-  ) %>%
-  addPolygons(data = ward_SA, stroke = T, weight = 1, opacity = 0.5, color = "grey", fillOpacity = 0.5, 
-              smoothFactor = 1, fillColor = ~factpal_ward(DENSITY), 
-              popup = ward_popup, options = popupOptions(), group =  "Ward Population Density") %>%
-  addPolygons(data = town_SA, stroke = T, weight = 1, opacity = 0.5, color = "white", fillOpacity = 0.5, 
-              smoothFactor = 1, fillColor = ~factpal_town(DENSITY), 
-              popup = town_popup, options = popupOptions(), group =  "Municipal Population Density") %>%  
+# ward AND municipal level spatial polygon choropleth map of population density over VIIRS City Light map tiles
+wm_density_map <- leaflet(ward_SA) %>% setView(lng = 28.2, lat = -26, zoom = 5) %>%
+  # Base Groups
+  addTiles(urlTemplate = "http://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg", 
+           group = "Night Light (default)", 
+           attribution = paste('Imagery provided by GIBS,', 'operated by the NASA/GSFC/<a href="https://earthdata.nasa.gov">EOSDIS</a>',
+                               'with funding provided by NASA/HQ.')
+           ) %>%
+  addProviderTiles("CartoDB.DarkMatter", group = "CartoDB Dark Matter") %>%
 # Overlay Groups  
-  addProviderTiles("Stamen.TonerLines", group = "Labels, Roads & Borders") %>% 
-  addProviderTiles("Stamen.TonerLabels", group = "Labels, Roads & Borders") %>%
+  addPolygons(data = ward_SA, stroke = T, weight = 0.5, opacity = 0, color = "navy", fillOpacity = 1, 
+              smoothFactor = 0.5, fillColor = ~pal_night(DENSITY), 
+              popup = ward_popup, options = popupOptions(), group =  "Ward Population Density"
+              ) %>%
+  addPolygons(data = town_SA, stroke = T, weight = 1, opacity = 0, color = "white", fillOpacity = 1, 
+              smoothFactor = 1, fillColor = ~pal_night(DENSITY), 
+              popup = town_popup, options = popupOptions(), group =  "Municipal Population Density"
+              ) %>% 
   addTopoJSON(topojson = province_tj_txt, stroke = T, weight = 2, color = "black", fill = FALSE, 
               fillOpacity = 0.5, smoothFactor = 1,  
               #popup = ward_popup, 
-              options = popupOptions(), group =  "Provincial Boundaries in 2011") %>%
-# Add a legend  
-  addLegend(position = "bottomright", colors = topo.colors(n = 7), labFormat = labelFormat(),
-            labels = ~round(quantile(x = ward_SA@data$DENSITY, probs = seq(0,1,(1/6)))), digits = 0),
-                        title = "Density 2011 (People per square km)", opacity = 1) %>%
-# Layer Control  
-  addLayersControl(baseGroups = c("Night Light", "Ward Population Density", "Municipal Population Density"),
-                   overlayGroups = c("Labels, Roads & Borders", "Provincial Boundaries in 2011"),
+              options = popupOptions(), group =  "Labels, Roads & Borders"
+              ) %>%
+  addProviderTiles("Stamen.TonerLines", group = "Labels, Roads & Borders", options = ) %>% 
+  addProviderTiles("Stamen.TonerLabels", group = "Labels, Roads & Borders") %>%
+  addLegend(position = "bottomright", pal = pal_night, 
+            values = ~ventiles[seq(from = 1, to = 15, 2)],
+            title = "Population/km<sup>2</sup>", opacity = 1, na.label = "Over 1500", 
+            labFormat = labelFormat(big.mark = " ")) %>%
+  # Layer Control  
+  addLayersControl(baseGroups = c("Night Light (default)", "Ward Population Density"),
+                   overlayGroups = c("Municipal Population Density", "CartoDB Dark Matter", 
+                                     "Labels, Roads & Borders"),
                    options = layersControlOptions(collapse = FALSE)
-)
+  )
 
+
+# topojson ward AND municipal map
 topojson_density_map <- leaflet() %>% setView(lng = 28.2, lat = -26, zoom = 5) %>%
 # Base Groups
   addProviderTiles("CartoDB.Positron", group = "CartoDB Positron") %>%
 # Overlay Groups  
-  addTopoJSON(topojson = ward_tj_txt, stroke = T, weight = 1, color = "grey", fill = FALSE, 
-              fillOpacity = 0.5, smoothFactor = 0.5, fillColor = ~factpal_ward(DENSITY), 
-              #popup = ward_popup, 
-              options = popupOptions(), group =  "Population Density (Ward level)") %>%
-  addTopoJSON(topojson = town_tj_txt, stroke = T, weight = 1.5, color = "red", fill = FALSE, 
-              fillOpacity = 0.5, smoothFactor = 0.5, fillColor = ~factpal_ward(DENSITY), 
-              #popup = ward_popup, 
-              options = popupOptions(), group =  "Population Density (Municipal level)") %>%
-  addTopoJSON(topojson = province_tj_txt, stroke = T, weight = 2, color = "black", fill = FALSE, 
-              fillOpacity = 0.5, smoothFactor = 0.5, fillColor = color, 
-              #popup = ward_popup, 
-              options = popupOptions(), group =  "Population Density (Provincial level)") %>%
-  addLegend(position = "bottomright", pal = factpal1_ward, 
-            values = ~round(seq.int(from = min(ward_SA@data$DENSITY), to = max(ward_SA@data$DENSITY),
-                                    length.out = 5), digits = 0),
-            title = "Density 2011 (People per sq km)", opacity = 0.5) %>%
+  addTopoJSON(topojson = ward_tj_txt, stroke = T, weight = 1, color = "grey", fill = T, 
+              fillOpacity = 0.5, smoothFactor = 0.5, fillColor = "green", 
+              options = popupOptions(), group =  "Population Density (Ward level)"
+              ) %>%
+  addTopoJSON(topojson = town_tj_txt, stroke = T, weight = 1.5, color = "red", fill = T, 
+              fillOpacity = 0.5, smoothFactor = 0.5, fillColor = "yellow",
+              options = popupOptions(), group =  "Population Density (Municipal level)"
+              ) %>%
+  addTopoJSON(topojson = province_tj_txt, stroke = T, weight = 2, color = "black", fill = F, 
+              fillOpacity = 1, smoothFactor = 0.5, 
+              options = popupOptions(), group =  "Population Density (Provincial level)"
+              ) %>%
 # Layer Control  
-  addLayersControl(baseGroups = c("Night Light (default)", "Stamen Toner"),
-                   overlayGroups = c("Labels, Roads & Borders", "Population Density (Ward level)",
-                                     "Population Density (Municipal level)","Population Density (Provincial level)"),
+  addLayersControl(baseGroups = c("CartoDB Positron"),
+                   overlayGroups = c("Population Density (Ward level)", 
+                                     "Population Density (Municipal level)",
+                                     "Population Density (Provincial level)"),
                    options = layersControlOptions(collapse = FALSE)
-  )
+                   )
+
