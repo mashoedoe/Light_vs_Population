@@ -173,3 +173,27 @@ topojson_density_map <- leaflet() %>% setView(lng = 28.2, lat = -26, zoom = 5) %
                    options = layersControlOptions(collapse = FALSE)
                    )
 
+if (!dir.exists("RDS")) dir.create("RDS")
+
+save.image(file = "gis.RData")
+saveRDS(town_SA, file = "RDS/town_SA.rds")
+saveRDS(town_tj, file = "RDS/town_tj.rds")
+saveRDS(town_dbf, file = "RDS/town_dbf.rds")
+saveRDS(ward_SA, file = "RDS/ward_SA.rds")
+saveRDS(ward_tj, file = "RDS/ward_tj.rds")
+saveRDS(ward_dbf, file = "RDS/ward_dbf.rds")
+
+# steps to create wards_SA_ordered SpatialPolygonDataframe:
+wards_SA <- rgdal::readOGR(dsn = "Mapshaper/Wards_2.5/Wards2011.shp", layer = "Wards2011")
+wards_SA@data$WARD_ID <- as.integer(as.character(wards_SA@data$WARD_ID))
+Population <- read.csv("data/Population2011.csv", header = T)
+sum(Population$WARD == wards_SA@data$WARD_ID)
+Population <- Population[order(Population$WARD), ]
+wards_SA <- wards_SA[order(wards_SA@data$WARD_ID),]
+if (sum(Population$WARD == wards_SA@data$WARD_ID) == 4277) {
+wards_SA@data$POPULATION <- Population$Population
+}
+names(wards_SA@data) <- sub("^WARD_POP$", "VOTERS", names(wards_SA@data))
+wards_SA@data$DENSITY <- wards_SA@data$POPULATION/wards_SA@data$Area
+wards_SA_ordered <- wards_SA[order(wards_SA@data$DENSITY),]
+saveRDS(object = wards_SA_ordered, file = "wards_SA_ordered.rds")
