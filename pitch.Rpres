@@ -1,0 +1,41 @@
+Chorpleth overlay
+===
+Mean population density in South Africa in people per km^2 is:
+
+```{r, echo=F}
+library(leaflet)
+library(magrittr)
+library(ggplot2)
+wards <- readRDS("RDS/wards_SA_ordered.rds")
+round(sum(wards@data$POPULATION)/sum(wards@data$Area), digits = 1)
+```
+The distribution of Population density is very skewed
+```{r, echo = F, fig.height=4, fig.width=6,}
+ggplot(aes(x=DENSITY), data=wards@data) + 
+  geom_histogram(binwidth = 1000, color = "white") +
+  ggtitle("Population density in South Africa's 4277 Wards") +
+  labs(x="Density in people/sq km",y="Number of wards")
+
+
+```
+
+===
+What the satellite images look like without a choropleth overlay
+<img src="/media/mashudu/A296E14C96E12191/Copy/git/Light_vs_Population/pitch-figure/no_overlay.png"; style="width: 800px;"/>
+
+
+===
+What the choropleth overlay looks like with the Threshold at the 50th percentile of Ward Population Density
+<img src="/media/mashudu/A296E14C96E12191/Copy/git/Light_vs_Population/pitch-figure/50th.png"; style="width: 800px;"/>
+
+
+
+===
+What the choropleth overlay looks like with the Threshold at 70th percentile of Ward Population Density
+<img src="/media/mashudu/A296E14C96E12191/Copy/git/Light_vs_Population/pitch-figure/70th.png"; style="width: 800px;"/>
+
+
+
+====
+What the choropleth overlay looks like with the Threshold at 95th percentile of Ward Population Density
+<img src="/media/mashudu/A296E14C96E12191/Copy/git/Light_vs_Population/pitch-figure/95th.png"; style="width: 800px;"/>
