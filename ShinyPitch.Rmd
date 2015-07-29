@@ -1,0 +1,175 @@
+---
+title: "Light and Population"
+subtitle: "Manipulating a choropleth overlay to approximate underlying satellite map tiles"
+author: Mashoedoe
+date: 26 July 2015
+runtime: shiny
+output: ioslides_presentation
+---
+
+## Population distribution and inequality {.smaller}
+```{r ward_data, echo = T, message=FALSE}
+wards_SA_ordered <- readRDS("RDS/wards_SA_ordered.rds")
+wards_SA_ordered@data$DENSITY <- round(wards_SA_ordered@data$DENSITY, digits=1)
+```
+<small></small>The distribution of population density accross South Africa is very skewed. Mean population density in South Africa is `r round(sum(wards_SA_ordered@data$POPULATION)/sum(wards_SA_ordered@data$Area),digits = 1)` people/km<small><small><small><sup>2</sup></small></small></small>. Another consideration is the unequal distribution of electricity (which is less kWh/person now than it was at the end of Apartheid in 1994.
+
+```{r histogram, echo = T, fig.height=2.3, fig.width=6}
+library(ggplot2)
+ggplot(aes(x=DENSITY), data=wards_SA_ordered@data) + geom_histogram(binwidth = 1000, color = "white") +
+  ggtitle("Population density in South Africa's 4277 Wards") + 
+  labs(x="Density in people/sq km",y="Number of wards")
+```
+</small>
+
+## {.smaller}
+```{r map, echo=FALSE, message=F}
+library(shiny)
+library(leaflet)
+library(marray)
+wards_SA_ordered <- readRDS("RDS/wards_SA_ordered.rds")
+wards_SA_ordered@data$DENSITY <- round(wards_SA_ordered@data$DENSITY, digits = 1)
+ui <- bootstrapPage(
+  leafletOutput(outputId="map",width="100%",height="510px"),
+  absolutePanel(
+    top=0, left=50, right=0,
+    h4(
+    "Manipulating a population density choropleth map of South Africa to match VIIRS polar orbit map tiles",
+         style="color:white"
+    ),
+#   p(
+#     "Experiment with different upper threshold values to alter how the population density choropleth displays.",
+#     br(),
+#     "The default setting is to include the 70% least densely populated wards in the choropleth palette.",
+#     br(),
+#     "The remaining 30% most densely populated wards are coded as the color 'white' by default.",
+#     br(),
+#     "See how changing these defaults with the slider and dropdown, changes the map display",
+#     style="color:white"
+#     ),
+  sliderInput(
+    inputId="integer",
+    label=span(HTML("Density Threshold in People/km<sup>2</sup>"),style="color:white"),
+    min=min(wards_SA_ordered@data$DENSITY),
+    max=max(wards_SA_ordered@data$DENSITY),
+    round=-1,step=1,
+    value=round(quantile(x=wards_SA_ordered@data$DENSITY,probs=0.7),digits=0),
+    width="650px"
+    ),
+  selectInput(
+    inputId = "select_densities",
+    label=span("Density Threshold in % of Wards",style="color:white"),
+    choices=trunc(quantile(x=wards_SA_ordered@data$DENSITY,probs=seq(0,1,0.05)),digits=1),
+    selected=trunc(quantile(x=wards_SA_ordered@data$DENSITY,probs=0.7),digits=1),
+    width="250px"
+    ),
+  checkboxInput(
+    inputId="ward_polygons",label=span("Show population density polygons over night light map tiles", style="color:white"), 
+    value=TRUE
+    )
+  )
+)
+
+
+
+server <- function(input, output, session) {
+colorpal <- reactive({
+    colorNumeric(c(marray::maPalette(low = "#09183e", mid = "yellow", high = "white",
+                                     k = dim(wards_SA_ordered[wards_SA_ordered@data$DENSITY <= input$integer,])[1]),
+                   rep(x = "#FFFFFF", 
+                       times = (4277 - dim(wards_SA_ordered[wards_SA_ordered@data$DENSITY <= input$integer,])[1]))),
+                 domain = c(0, input$integer), na.color = "white")
+  })
+
+output$map <- renderLeaflet({
+   map = leaflet(
+     wards_SA_ordered
+     ) %>%
+     addTiles(
+      urlTemplate <- "http://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg", 
+      group = "Night Light (default)",
+      attribution = paste('Imagery provided by GIBS,',
+                          'operated by the NASA/GSFC/<a href="https://earthdata.nasa.gov">EOSDIS</a>',
+                          'with funding provided by NASA/HQ.')
+      ) %>% 
+    setView(
+      lng = 25, lat = -28, zoom = 5
+    )
+   })
+
+
+observe({
+  val <- input$select_densities
+  updateSliderInput(session, "integer", value = val)
+  })
+  
+# Incremental changes to the map (in this case, changing the chorpleth palette and 
+# coloring of the wards when a new threshold population density is chosen) should 
+# be performed in an observer. Each independent set of things that can change
+# should be managed in its own observer.
+observe({
+  proxy1 <- leafletProxy("map", data = wards_SA_ordered) 
+  proxy1 %>% clearShapes()
+  pal <- colorpal()
+  if (input$ward_polygons) {
+    proxy1 %>%
+      addPolygons(
+        stroke = T, weight = 1, opacity = 0, color = "white", fillOpacity = 1,
+        smoothFactor = 0.5, fillColor = ~pal(DENSITY),
+        popup = ~paste0(wards_SA_ordered@data$MUNICNAME,
+                        "<br />",
+                        "<strong> Ward </strong>",
+                        wards_SA_ordered@data$WARDNO,
+                        "<br />",
+                        "<strong>Density: </strong>",
+                        round(wards_SA_ordered@data$DENSITY, digits = 1),
+                        " people/km",
+                        "<sup>2</sup>"),
+        options = popupOptions()
+        )}
+  })
+
+  
+# Use a separate observer to recreate the legend as needed.
+observe({
+  proxy2 <- leafletProxy("map", data = wards_SA_ordered)
+  # Remove any existing legend, and only if the legend is enabled, create a new one.
+  proxy2 %>% clearControls()
+  pal <- colorpal()
+  proxy2 %>% addLegend(
+    position = "bottomright", pal = pal, values = ~DENSITY,
+    title = "Population/km<sup>2</sup>", opacity = 1, na.label = "Over 1500",
+    labFormat = labelFormat(big.mark = " ")
+    )
+  })
+
+}
+
+shinyApp(ui, server)
+```
+
+## {.smaller}
+<div class="columns-2" >
+South Africa at night from the VIIRS polar orbit satellite without a ward population density choropleth overlay
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/no_overlay.png"; style="width: 400px;"/>
+
+What the choropleth overlay looks like with the threshold at the 50th percentile of ward population density
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/50th.png"; style="width: 400px;"/>
+
+## {.smaller}
+<div class="columns-2" >
+What the choropleth overlay looks like with the threshold at the 70th percentile of ward population density
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/70th.png"; style="width: 400px;"/>
+
+What the choropleth overlay looks like with the threshold at the 95th percentile of ward population density
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/95th.png"; style="width: 400px;"/>
+
+```{r references, echo=FALSE}
+# http://rmarkdown.rstudio.com/ioslides_presentation_format.html
+# http://rmarkdown.rstudio.com/beamer_presentation_format.html
+# http://rmarkdown.rstudio.com/slidy_presentation_format.html
+```

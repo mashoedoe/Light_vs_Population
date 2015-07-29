@@ -107,7 +107,7 @@ ward_density_map <- leaflet(ward_SA) %>% setView(lng = 28.2, lat = -26, zoom = 5
             labFormat = labelFormat(big.mark = " ")) %>%
 # Layer Control  
   addLayersControl(baseGroups = c("Night Light (default)", "CartoDB Dark Matter"),
-                   overlayGroups = c("Population Density"),
+                   overlayGroups = c("70% threshold", "50% threshold", "30% threshold),
                    options = layersControlOptions(collapse = FALSE)
 )
 

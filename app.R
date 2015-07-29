@@ -107,14 +107,12 @@ server <- function(input, output, session) {
   # rather than the slider
   observe({
     val <- input$select_densities
-    # Control the value, min, max, and step.
-    # Step size is 2 when input value is even; 1 when value is odd.
     updateSliderInput(session, "integer", value = val)
   })
   
-  # Incremental changes to the map (in this case, replacing the
-  # circles when a new color is chosen) should be performed in
-  # an observer. Each independent set of things that can change
+  # Incremental changes to the map (in this case, changing the chorpleth palette and 
+  # coloring of the wards when a new threshold population density is chosen) should 
+  # be performed in an observer. Each independent set of things that can change
   # should be managed in its own observer.
   observe({
     proxy1 <- leafletProxy("map", data = wards_SA_ordered) 
