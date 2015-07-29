@@ -1,0 +1,255 @@
+---
+title       : "Light and Population"
+subtitle    : "Manipulating a choropleth overlay to approximate underlying satellite map tiles"
+author      : "Mashoedoe"
+job         : "26 July 2015"
+framework   : io2012      # {minimal, bootstrap,  deckjs,  dzslides,  fathomjs,  flowtime,  html5slides,  impressjs,  io2012,  landslide,  minimal,  opencpu,  revealjs,  shiny,  shower,  showoff,  slideous,  slidy, ...}
+highlighter : highlight.js  # {highlight.js, prettify, highlight}
+hitheme     : solarized_light      # {tomorrow, zenburn, github}
+widgets     : [bootstrap, quiz, shiny, interactive]            # {mathjax, quiz, bootstrap, shiny, interactive, mathjax, popcornjs,scianimator}
+ext_widgets : {rCharts: [libraries/nvd3, libraries/highcharts]}
+mode        : selfcontained # {standalone, draft}
+knit        : slidify::knit2slides
+output:
+  md_document:
+    variant: markdown+escaped_line_breaks  # {markdown, markdown_strict, markdown_github, markdown_mmd, markdown_phpextra}
+---
+<style>
+.codefont-size pre {
+  font-size: 15px;
+}
+
+.right-margin p {
+
+
+  margin-right: 50px;
+
+}
+
+.margins p {
+  margin: 100px 50px 50px 50px;
+}
+</style>
+
+## Population distribution and inequality 
+```{r ward_data, echo = T, message=FALSE}
+wards_SA_ordered <- readRDS("assets/wards_SA_ordered.rds")
+wards_SA_ordered@data$DENSITY <- round(wards_SA_ordered@data$DENSITY, digits=1)
+```
+<small></small>The distribution of population density accross South Africa is very skewed. Mean population density in South Africa is `r round(sum(wards_SA_ordered@data$POPULATION)/sum(wards_SA_ordered@data$Area),digits = 1)` people/km<small><small><small><sup>2</sup></small></small></small>. Another consideration is the unequal distribution of electricity (which is less kWh/person now than it was at the end of Apartheid in 1994.
+
+```{r histogram, echo = T, fig.height=2.3, fig.width=6}
+library(ggplot2)
+ggplot(aes(x=DENSITY), data=wards_SA_ordered@data) + 
+  geom_histogram(binwidth=1000,color = "white") +
+  ggtitle("Population density in South Africa's 4277 Wards") + 
+  labs(x="Density in people/sq km",y="Number of wards")
+```
+</small>
+
+--- &interactive
+
+## 
+```{r shiny, results = 'asis', comment = NA, message = F, echo = F, opts.label = 'shiny', cache=F}
+library(shiny)
+library(leaflet)
+library(marray)
+wards_SA_ordered <- readRDS("assets/wards_SA_ordered.rds")
+wards_SA_ordered@data$DENSITY <- round(wards_SA_ordered@data$DENSITY, digits = 1)
+slidifyLibraries::slidifyUI(bootstrapPage(
+  leafletOutput(outputId="map",width="100%",height="510px"),
+  absolutePanel(
+    top=0, left=50, right=0,
+    h4(
+    "Manipulating a population density choropleth map of South Africa to match VIIRS polar orbit map tiles",
+         style="color:white"
+    ),
+#   p(
+#     "Experiment with different upper threshold values to alter how the population density choropleth displays.",
+#     br(),
+#     "The default setting is to include the 70% least densely populated wards in the choropleth palette.",
+#     br(),
+#     "The remaining 30% most densely populated wards are coded as the color 'white' by default.",
+#     br(),
+#     "See how changing these defaults with the slider and dropdown, changes the map display",
+#     style="color:white"
+#     ),
+  sliderInput(
+    inputId="integer",
+    label=span(HTML("Density Threshold in People/km<sup>2</sup>"),style="color:white"),
+    min=min(wards_SA_ordered@data$DENSITY),
+    max=max(wards_SA_ordered@data$DENSITY),
+    round=-1,step=1,
+    value=round(quantile(x=wards_SA_ordered@data$DENSITY,probs=0.7),digits=0),
+    width="650px"
+    ),
+  selectInput(
+    inputId = "select_densities",
+    label=span("Density Threshold in % of Wards",style="color:white"),
+    choices=trunc(quantile(x=wards_SA_ordered@data$DENSITY,probs=seq(0,1,0.05)),digits=1),
+    selected=trunc(quantile(x=wards_SA_ordered@data$DENSITY,probs=0.7),digits=1),
+    width="250px"
+    ),
+  checkboxInput(
+    inputId="ward_polygons",label=span("Show population density polygons over night light map tiles", style="color:white"), 
+    value=TRUE
+    )
+  )
+))
+```
+
+--- &twocol w1:58% w2:38% .right-margin
+
+*** =left
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/no_overlay.png"; style="width: 500px;"/>  
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/50th.png"; style="width: 500px;"/>  
+
+
+*** =right
+<br>
+<br>
+South Africa at night from the VIIRS polar orbit satellite without a ward population density choropleth overlay
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+What the choropleth overlay looks like with the threshold at the 50th percentile of ward population density
+
+--- &twocol w1:58% w2:38% .right-margin
+
+*** =left
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/70th.png"; style="width: 500px;"/>  
+
+<img src="https://raw.githubusercontent.com/mashoedoe/Light_vs_Population/cb36eac70e2e6927c91dfd8333218f029224cd1a/pitch-figure/95th.png"; style="width: 500px;"/>
+
+
+*** =right
+<br>
+<br>
+What the choropleth overlay looks like with the threshold at the 70th percentile of ward population density
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+What the choropleth overlay looks like with the threshold at the 95th percentile of ward population density
+
+```{r references, echo=FALSE}
+
+# https://github.com/ramnathv/slidify/wiki/Features
+# https://github.com/ramnathv/slidify/wiki/Layouts
+# https://github.com/ramnathv/slidify/wiki/Widgets
+# https://github.com/ramnathv/slidify/wiki/Page-Properties
+# http://slidify.github.io/interactive/
+```
+
+---
+
+```{r map, results = 'asis', comment = NA, message = F, echo = F, warning=F, cache=F}
+library(leaflet)
+library(marray)
+wards_SA_ordered <- readRDS("/media/mashudu/A296E14C96E12191/Copy/git/Light_vs_Population/RDS/wards_SA_ordered.rds")
+k30 <- as.numeric(dim(wards_SA_ordered[wards_SA_ordered@data$DENSITY <=quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.3),])[1]) # 1283
+k70 <- as.numeric(dim(wards_SA_ordered[wards_SA_ordered@data$DENSITY <=quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.7),])[1]) # 2994
+k95 <- as.numeric(dim(wards_SA_ordered[wards_SA_ordered@data$DENSITY <=quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.95),])[1]) # 4063
+
+col30 <- c(maPalette(low = "#09183e", mid = "yellow", high = "white", k = 1283), 
+           rep(x = "#FFFFFF", times = (4277 - 1284)))
+col70 <- c(maPalette(low = "#09183e", mid = "yellow", high = "white", k = 2994), 
+           rep(x = "#FFFFFF", times = (4277 - 2994)))
+col95 <- c(maPalette(low = "#09183e", mid = "yellow", high = "white", k = 4063), 
+           rep(x = "#FFFFFF", times = (4277 - 4064)))
+
+pal95 <- colorNumeric(col95, domain = c(0, quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.95)), na.color = "white")
+pal70 <- colorNumeric(col70, domain = c(0, quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.7)), na.color = "white")
+pal30 <- colorNumeric(col30, domain = c(0, quantile(x = wards_SA_ordered@data$DENSITY, probs = 0.3)), na.color = "white")
+
+leaflet(
+  wards_SA_ordered
+  ) %>%
+  setView(
+    lng = 25, lat = -28, zoom = 5
+    )  %>%
+  addTiles(
+    urlTemplate <- "http://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg",
+    group = "Night Light Satellite Imagery",
+    attribution = paste(
+      'Imagery provided by GIBS,',
+      'operated by the NASA/GSFC/<a href="https://earthdata.nasa.gov">EOSDIS</a>',
+      'with funding provided by NASA/HQ.'
+      )
+    ) %>%
+    addPolygons(
+    stroke = T, weight = 1, opacity = 0, color = "white", 
+    fillOpacity = 1, group = "95% threshold",
+    smoothFactor = 0.5, fillColor = ~pal95(DENSITY),
+    popup = ~paste0(
+      wards_SA_ordered@data$MUNICNAME,
+      "<br />",
+      "<strong> Ward </strong>",
+      wards_SA_ordered@data$WARDNO,
+      "<br />",
+      "<strong>Density: </strong>",
+      round(wards_SA_ordered@data$DENSITY, digits = 1),
+      " people/km",
+      "<sup>2</sup>"),
+    options = popupOptions()
+    ) %>%
+    addPolygons(
+    stroke = T, weight = 1, opacity = 0, color = "white", 
+    fillOpacity = 1, group = "70% threshold",
+    smoothFactor = 0.5, fillColor = ~pal70(DENSITY),
+    popup = ~paste0(
+      wards_SA_ordered@data$MUNICNAME,
+      "<br />",
+      "<strong> Ward </strong>",
+      wards_SA_ordered@data$WARDNO,
+      "<br />",
+      "<strong>Density: </strong>",
+      round(wards_SA_ordered@data$DENSITY, digits = 1),
+      " people/km",
+      "<sup>2</sup>"),
+    options = popupOptions()
+    ) %>%
+    addPolygons(
+    stroke = T, weight = 1, opacity = 0, color = "white", 
+    fillOpacity = 1, group = "30% threshold",
+    smoothFactor = 0.5, fillColor = ~pal30(DENSITY),
+    popup = ~paste0(
+      wards_SA_ordered@data$MUNICNAME,
+      "<br />",
+      "<strong> Ward </strong>",
+      wards_SA_ordered@data$WARDNO,
+      "<br />",
+      "<strong>Density: </strong>",
+      round(wards_SA_ordered@data$DENSITY, digits = 1),
+      " people/km",
+      "<sup>2</sup>"),
+    options = popupOptions()
+    ) %>%
+    addLegend(
+     position = "bottomright", pal = pal70, values = ~DENSITY,
+     title = "70% threshold density", opacity = 1,
+     labFormat = labelFormat(big.mark = " ")
+   ) %>%
+#    addLegend(
+#     position = "bottomleft", pal = pal95, values = ~DENSITY,
+#     title = "95% threshold density", opacity = 1,
+#     labFormat = labelFormat(big.mark = " ")
+#   ) %>%
+  addLayersControl(
+#    overlayGroups = "Night Light Satellite Imagery",
+    baseGroups = c("95% threshold", "70% threshold", "30% threshold"),
+    options = layersControlOptions(collapse = FALSE),
+    position = "topleft"
+  )
+```
+
