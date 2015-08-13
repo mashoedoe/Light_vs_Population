@@ -1,8 +1,8 @@
 ---
 title: "Light and Population"
 subtitle: "Manipulating a choropleth overlay to approximate underlying satellite map tiles"
-author: Mashoedoe
-date: 26 July 2015
+author: "Mashoedoe"
+date: "26 July 2015"
 runtime: shiny
 output: ioslides_presentation
 ---
